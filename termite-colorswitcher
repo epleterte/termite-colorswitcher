@@ -1,0 +1,171 @@
+#!/bin/bash -ue
+# Christian Bryn <chr.bryn@gmail.com> 2017
+#
+# Copyright (c) 2017 Christian Bryn <chr.bryn@gmail.com>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+## config
+remote_base16_theme_listing="https://api.github.com/repos/khamer/base16-termite/contents/themes"
+colors_tmp_file="$(mktemp)"
+
+termite_config="~/.config/termite/config"
+
+## flags
+quiet="false"
+update="false"
+
+# fancy terminal stuff
+if [ -t 1 ]; then
+    exec 3>&2 2>/dev/null
+    b=$( tput bold ) || true
+    red=$( tput setf 4 ) || true
+    green=$( tput setf 2 ) || true
+    yellow=$( tput setf 6 ) || true
+    t_reset=$( tput sgr0 ) || true
+    exec 2>&3; exec 3>&-
+fi
+
+## functions
+function print_usage {
+  cat <<EOF
+Safely append color config to ${termite_config}
+
+Usage: ${0} [-hdq] [-t <theme>]
+  -h    This helpful text
+  -d    Delete color config previosly added.
+  -t    Set theme.
+  -q    Quiet - only print errors.
+
+Examples:
+  ${0} -l
+  ${0} -t sometheme-dark
+  ${0} -q -t sometheme-light
+EOF
+}
+
+function p_err {
+    # print errors
+    # params: <string>
+    local string="${@}"
+    printf "${b:-}${red:-}>>${t_reset:-} %s\n" "${string}"
+}
+
+function p_info {
+    # print info
+    # params: <string>
+    local string="${@}"
+    [[ "${quiet}" == "false" ]] && printf "${b:-}${yellow:-}>>${t_reset:-} %s\n" "${string}"
+}
+
+function delete_entries_found {
+  if ( egrep -q "^### TERMITE COLORS BEGIN ###$" "${termite_config}" )
+  then
+    #p_info "TERMITE BEGIN marker found."
+    if ( ! egrep -q "^### TERMITE COLORS END ###$" "${termite_config}" )
+    then
+      p_err "You have a 'TERMITE COLORS BEGIN' marker in your hosts file, but no 'TERMITE COLORS END' marker - bogus, man! Please fix to continue."
+      exit 1
+    fi
+    p_info "Deleting old TERMITE COLORS entries. Hope you didn't manually change them."
+    sed -i '/^### TERMITE COLORS BEGIN ###$/,/^### TERMITE COLORS END ###$/ d' "${termite_config}"
+    p_info "OK, hopefully I removed the old ones..."
+  else
+    if ( egrep -q '^\[colors\]' "${termite_config}" )
+    then
+      p_err "Color config found, but no magic marker (it will be inserted by this script)"
+      p_err "Please remove or comment out the [colors] section in ~/.config/termite/config and rerun this script"
+      exit 1
+    fi
+  fi
+}
+
+function remote_base16_themes {
+  action="$1"
+  argument=${2:-}
+  theme_urls=$(curl -s "${remote_base16_theme_listing}" | awk '/download_url/ { print $2 }' | tr -d '",')
+  for theme_url in ${theme_urls}; do
+    theme=$( echo $( basename ${theme_url} ) | sed -e 's/\.config$//g' )
+    case ${action} in
+      "list")
+      echo "${theme}" ;;
+      #"switch")
+      #theme_tmp_file=$(mktemp)
+      #curl -s "${theme_url}" >${theme_tmp_file}
+      "list_url")
+      # XXX: Check argument length
+      if [[ "${theme}" == "$2" ]]
+      then
+        echo "${theme_url}"
+        break
+      fi
+    esac
+  done
+}
+
+list="false"
+while getopts hcdlt:q o
+do
+  case $o in
+    h)
+      print_usage ; exit ;;
+    c)
+      termite_config="$OPTARG" ;;
+    d)
+      delete_entries_found ; exit ;;
+    l)
+      list="true" ;;
+    t)
+      update="true"
+      theme="$OPTARG" ;;
+    q)
+      update="true"
+      quiet="true" ;;
+  esac
+done
+shift $(($OPTIND-1))
+
+if [[ "${list}" == "true" ]]
+then
+  remote_base16_themes list
+  exit
+fi
+
+[[ "${update}" != "true" ]] && { echo "No update/delete action specified!"; print_usage; exit; }
+[[ -f "${termite_config}" ]] || p_err "File ${termite_config} does not exist!"
+[[ "${theme}" == "" ]] && { echo "No theme selected. Pick one with -l and set with -t"; exit; }
+
+trap 'rm "${colors_tmp_file}"' EXIT
+
+remote_theme_color_config=$( remote_base16_themes list_url "${theme}" )
+[[ "${remote_theme_color_config}" == "" ]] && { echo "No config found for ${theme} - check name or internet connection"; exit 1; }
+
+p_info "Fetching remote file..."
+
+curl -s "${remote_theme_color_config}" > "${colors_tmp_file}"
+
+p_info "Backing up existing config to /tmp/"
+p_info "You should verify the results after having run this script."
+cp ${termite_config} /tmp/termite.config..$( date "+%s" )
+
+p_info "Removing previous color configuration"
+delete_entries_found
+
+p_info "Adding new entries!"
+
+echo "### TERMITE COLORS BEGIN ###" | tee -a "${termite_config}" >/dev/null
+cat "${colors_tmp_file}" | tee -a "${termite_config}" >/dev/null
+echo "### TERMITE COLORS END ###" | tee -a "${termite_config}" >/dev/null
+
+p_info "Allright. I hope this went well. Happy hacking!"
