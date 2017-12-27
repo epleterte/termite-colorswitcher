@@ -15,4 +15,22 @@ installation
 
     git clone https://github.com/epleterte/termite-colorswitcher
     cd termite-colorswitcher
-    ./termite-colorswitcher
+    ./install.sh
+
+usage
+=====
+
+    $ ./termite-colorswitcher -h
+    Safely append color config to ~/.config/termite/config
+    
+    Usage: ./termite-colorswitcher [-hdq] [-t <theme>]
+      -h    This helpful text
+      -d    Delete color config previosly added.
+      -t    Set theme.
+      -q    Quiet - only print errors.
+    
+    Examples:
+      ./termite-colorswitcher -l
+      ./termite-colorswitcher -t sometheme-dark
+      ./termite-colorswitcher -q -t sometheme-light
+
