@@ -42,9 +42,10 @@ function print_usage {
   cat <<EOF
 Safely append color config to ${termite_config}
 
-Usage: ${0} [-hdq] [-t <theme>]
+Usage: ${0} [-hdlq] [-t <theme>]
   -h    This helpful text
   -d    Delete color config previosly added.
+  -l    List available themes.
   -t    Set theme.
   -q    Quiet - only print errors.
 
