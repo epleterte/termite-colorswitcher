@@ -23,9 +23,10 @@ usage
     $ ./termite-colorswitcher -h
     Safely append color config to ~/.config/termite/config
     
-    Usage: ./termite-colorswitcher [-hdq] [-t <theme>]
+    Usage: ./termite-colorswitcher [-hdlq] [-t <theme>]
       -h    This helpful text
       -d    Delete color config previosly added.
+      -l    List available themes.
       -t    Set theme.
       -q    Quiet - only print errors.
     
